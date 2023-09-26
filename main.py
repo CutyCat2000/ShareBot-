@@ -18,6 +18,20 @@ cursor = db.execute('''
 ''')
 
 db.close()
+EMBED_COLOR_ERROR = 0xE74C3C
+embed_color_mapping = {
+    'teal': 0x1ABC9C,
+    'purple': 0x9B59B6,
+    'yellow': 0xF1C40F,
+    'blue': 0x3498DB,
+    'green': 0x2ECC71,
+    'pink': 0xFF6B81,
+    'black': 0x34495E,
+    'lavender': 0xAF7AC5,
+    'crimson': 0xC0392B,
+    'none': 0x2F3136
+}
+EMBED_COLOR = embed_color_mapping.get(config.EMBED_COLOR, 0xFFFFFF)
 
 def text_replace(text):
     text = text.upper()
@@ -90,15 +104,113 @@ class Client(discord.Client):
 
 client = Client()
 
-@client.tree.command(name="info")
+async def sendNotYourButtonEmbed(interaction, userId):
+    if interaction.user.id != userId:
+        embed = discord.Embed(title="Not your button", description="This is not your button, please type the command yourself in this or another server to use the buttons.", color = EMBED_COLOR_ERROR)
+        if config.EPHEMERAL_MESSAGES:
+            await interaction.followup.send(embed=embed, ephemeral = True)
+        else:
+            await interaction.followup.send(embed=embed)
+        return True
+    return False
+
+class InfoMainButton(ui.Button):
+    def __init__(self, userId):
+        super().__init__(label = "Main", emoji = "🛖")
+        self.userId = userId
+    async def callback(self, interaction):
+        await interaction.response.defer(ephemeral = True)
+        if await sendNotYourButtonEmbed(interaction, self.userId):
+            return
+        embed = interaction.message.embeds[0]
+        server_count = len(client.guilds)
+        user_count = len(client.guilds)
+        try:
+            db = sqlite3.connect(config.DATABASE)
+            running_server_count = db.execute('SELECT COUNT(*) FROM servers').fetchone()[0]
+        finally:
+            db.close()
+        embed.description = config.NAME + f""" is a powerful server promotion assistant for Discord communities.
+Navigate through the sections of the /info menu for more.
+
+**Stats**:
+- Servers: {server_count}
+- Users: {user_count}
+- Running Servers: {running_server_count}"""
+        await interaction.message.edit(embed = embed)
+
+class InfoAboutButton(ui.Button):
+    def __init__(self, userId):
+        super().__init__(label = "About", emoji = "ℹ️")
+        self.userId = userId
+    async def callback(self, interaction):
+        await interaction.response.defer(ephemeral = True)
+        if await sendNotYourButtonEmbed(interaction, self.userId):
+            return
+        embed = interaction.message.embeds[0]
+        embed.description = """About """+config.NAME+""":
+Bot Invite: [Click here](https://discord.com/api/oauth2/authorize?client_id="""+str(client.user.id)+"""&permissions=139586751553&scope=bot%20applications.commands)
+Support Server: """+config.SUPPORT_SERVER+"""
+Github: https://github.com/CutyCat2000/ShareBot-"""
+        await interaction.message.edit(embed = embed)
+        
+class InfoPermissionButton(ui.Button):
+    def __init__(self, userId):
+        super().__init__(label = "Permissions", emoji = "🗝️")
+        self.userId = userId
+    async def callback(self, interaction):
+        await interaction.response.defer(ephemeral = True)
+        if await sendNotYourButtonEmbed(interaction, self.userId):
+            return
+        embed = interaction.message.embeds[0]
+        embed.description = """The required permissions are:
+- CREATE_INSTANT_INVITE
+- VIEW_CHANNEL
+- SEND_MESSAGES
+- EMBED_LINKS
+- ATTACH_FILES
+- ADD_REACTIONS
+- USE_EXTERNAL_EMOJIS
+- USE_EXTERNAL_STICKERS
+- USE_APPLICATION_COMMANDS"""
+        await interaction.message.edit(embed = embed)
+
+class InfoView(ui.View):
+    timeout = None
+    def __init__(self, userId):
+        super().__init__()
+        self.add_item(InfoMainButton(userId))
+        self.add_item(InfoAboutButton(userId))
+        self.add_item(InfoPermissionButton(userId))
+
+@client.tree.command(name="info", description = "Show information about "+config.NAME)
 async def info_command(interaction):
     await interaction.response.defer()
     user_count = len(client.users)
-    server_count = len(client.servers)
-    embed = discord.Embed(title = config.NAME, color = 0xFFFFFF)
-    embed.description = config.NAME + " is a powerful server promotion assistant for Discord communities."
-    # add fields + buttons
-    await interaction.followup.send(embed = embed)
+    server_count = len(client.guilds)
+    embed = discord.Embed(title = config.NAME, color = EMBED_COLOR)
+    server_count = len(client.guilds)
+    user_count = len(client.guilds)
+    try:
+        db = sqlite3.connect(config.DATABASE)
+        running_server_count = db.execute('SELECT COUNT(*) FROM servers').fetchone()[0]
+    finally:
+        db.close()
+    embed.description = config.NAME + f""" is a powerful server promotion assistant for Discord communities.
+Navigate through the sections of the /info menu for more.
+
+**Stats**:
+- Servers: {server_count}
+- Users: {user_count}
+- Running Servers: {running_server_count}"""
+    if client.user.avatar:
+        embed.set_footer(icon_url = client.user.avatar.url, text = config.NAME + " Support: " + config.SUPPORT_SERVER)
+    else:
+        embed.set_footer(text = config.NAME + " Support: " + config.SUPPORT_SERVER)
+    embed.set_thumbnail(url = "https://upload.wikimedia.org/wikipedia/commons/thumb/2/25/Info_icon-72a7cf.svg/2048px-Info_icon-72a7cf.svg.png")
+    await interaction.followup.send(embed = embed, view = InfoView(interaction.user.id))
+
+
 
 
 client.run(config.TOKEN)
