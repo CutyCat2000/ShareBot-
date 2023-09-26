@@ -7,3 +7,4 @@ ENABLE_AUTO_BUMP = True
 STATUS_MESSAGE = 'waiting for servers'
 DATABASE = 'db.sqlite3'
 ENABLE_PREMIUM = True
+EMBED_COLOR = "green" # teal, purple, red, yellow, blue, green, pink, black, lavender, crimson
