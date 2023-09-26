@@ -8,4 +8,4 @@ STATUS_MESSAGE = 'waiting for servers'
 DATABASE = 'db.sqlite3'
 ENABLE_PREMIUM = True
 EMBED_COLOR = "green" # teal, purple, yellow, blue, green, pink, black, lavender, crimson
-ENABLE_EPHEMERAL = True
+EPHEMERAL_MESSAGES = True
