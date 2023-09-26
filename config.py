@@ -1,0 +1,9 @@
+NAME = 'ShareBot+'
+TOKEN = ''
+SUPPORT_SERVER = ''
+BUMP_RATE_LIMIT = 3600
+USE_BUTTONS = True
+ENABLE_AUTO_BUMP = True
+STATUS_MESSAGE = 'waiting for servers'
+DATABASE = 'db.sqlite3'
+ENABLE_PREMIUM = True
