@@ -20,6 +20,7 @@ cursor = db.execute('''
         slogan TEXT,
         premium BOOLEAN,
         bump_count INTEGER,
+        last_bump DATETIME,
         channel INTEGER
     )
 ''')
@@ -66,9 +67,10 @@ def get_server(server_id):
                 'language': server_data[2],
                 'invite': server_data[3],
                 'slogan': server_data[4],
-                'premium': bool(server_data[5]),
+                'premium': server_data[5],
                 'bump_count': server_data[6],
-                'channel': server_data[7]
+                'last_bump': server_data[7],
+                'channel': server_data[8]
             }
             return server_info
         else:
@@ -76,7 +78,7 @@ def get_server(server_id):
     finally:
         db.close()
 
-def set_server(server_id, description, language, invite, slogan, premium, bump_count, channel):
+def set_server(server_id, description, language, invite, slogan, premium, bump_count, last_bump, channel):
     try:
         db = sqlite3.connect(config.DATABASE)
         cursor = db.cursor()
@@ -85,14 +87,14 @@ def set_server(server_id, description, language, invite, slogan, premium, bump_c
         if existing_server:
             cursor.execute('''
                 UPDATE servers
-                SET description = ?, language = ?, invite = ?, slogan = ?, premium = ?, bump_count = ?, channel = ?
+                SET description = ?, language = ?, invite = ?, slogan = ?, premium = ?, bump_count = ?, last_bump = ?, channel = ?
                 WHERE server_id = ?
-            ''', (description, language, invite, slogan, premium, bump_count, server_id, channel))
+            ''', (description, language, invite, slogan, premium, bump_count, last_bump, channel, server_id))
         else:
             cursor.execute('''
-                INSERT INTO servers (server_id, description, language, invite, slogan, premium, bump_count, channel)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (server_id, description, language, invite, slogan, premium, bump_count, channel))
+                INSERT INTO servers (server_id, description, language, invite, slogan, premium, bump_count, last_bump, channel)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (server_id, description, language, invite, slogan, premium, bump_count, last_bump, channel))
         db.commit()
         return True
     except Exception as es:
@@ -132,6 +134,23 @@ async def sendNotYourButtonEmbed(interaction, userId):
         return True
     return False
 
+async def sendNeedWaitEmbed(interaction, seconds_left):
+    hours, remainder = divmod(seconds_left, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    hours = int(hours)
+    minutes = int(minutes)
+    seconds = int(seconds)
+    embed=discord.Embed(title="Wait for bump", description=f"""You need to wait until this server can be bumped again.
+> Time left: `{hours}:{minutes}:{seconds}`""", color =EMBED_COLOR_ERROR)
+    if client.user.avatar:
+        embed.set_footer(icon_url = client.user.avatar.url, text = config.NAME + " Support: " + config.SUPPORT_SERVER)
+    else:
+        embed.set_footer(text = config.NAME + " Support: " + config.SUPPORT_SERVER)
+    if config.EPHEMERAL_MESSAGES:
+        await interaction.followup.send(embed=embed,ephemeral=True)
+    else:
+        await interaction.followup.send(embed = embed)
+
 async def sendMissingPermsEmbed(interaction, permission_name):
     embed = discord.Embed(title="Missing Perms", description=config.NAME+" is missing the permission "+permission_name, color=EMBED_COLOR_ERROR)
     if client.user.avatar:
@@ -142,6 +161,17 @@ async def sendMissingPermsEmbed(interaction, permission_name):
         await interaction.followup.send(embed = embed, ephemeral = True)
     else:
         await interaction.followup.send(embed = embed)
+
+async def sendGuildNotFoundEmbed(interaction, guild_id):
+    embed = discord.Embed(title="Guild not found", description=config.NAME+" was unable to locate the server with the ID: "+str(guild_id), color=EMBED_COLOR_ERROR)
+    if client.user.avatar:
+        embed.set_footer(icon_url = client.user.avatar.url, text=config.NAME+" Support: " + config.SUPPORT_SERVER)
+    else:
+        embed.set_footer(text=config.NAME + " Support: " + config.SUPPORT_SERVER)
+    if config.EPHEMERAL_MESSAGES:
+        await interaction.followup.send(embed=embed, ephemeral=True)
+    else:
+        await interaction.followup.send(embed=embed)
 
 async def sendNoAdminEmbed(interaction, permission_name):
     embed = discord.Embed(title="Missing Perms", description="You are missing the permission "+permission_name, color=EMBED_COLOR_ERROR)
@@ -154,7 +184,7 @@ async def sendNoAdminEmbed(interaction, permission_name):
     else:
         await interaction.followup.send(embed = embed)
 
-async def sendNotSetupEmbed(interaction, permission_name):
+async def sendNotSetupEmbed(interaction):
     embed = discord.Embed(title="Not Setup", description="This server has not been setup yet. (/setup)", color=EMBED_COLOR_ERROR)
     if client.user.avatar:
         embed.set_footer(icon_url = client.user.avatar.url, text = config.NAME + " Support: " + config.SUPPORT_SERVER)
@@ -237,8 +267,22 @@ class InfoCommandButton(ui.Button):
         embed = interaction.message.embeds[0]
         embed.description="**__"+config.NAME+""" commands__**:
 /info -> Show the information menu.
+/setup -> Start the interaction setup.
+/show -> Show the settings from setup.
 """
         await interaction.message.edit(embed = embed)
+
+class JoinServerButton(ui.Button):
+    def __init__(self, invite, serverName):
+        if not "discord.gg/" in invite:
+            invite = "discord.gg/"+invite
+        if not invite.startswith("https://") and not invite.startswith("http://"):
+            invite = "https://" + invite
+        super().__init__(label="Join " + serverName, emoji = "🔗", style=discord.ButtonStyle.link, url=invite)
+
+class JoinSupportServerButton(ui.Button):
+    def __init__(self):
+        super().__init__(label="Join "+config.NAME+" support", emoji = "👤", style=discord.ButtonStyle.link, url=config.SUPPORT_SERVER)
 
 class InfoView(ui.View):
     timeout = None
@@ -248,6 +292,14 @@ class InfoView(ui.View):
         self.add_item(InfoAboutButton(userId))
         self.add_item(InfoPermissionButton(userId))
         self.add_item(InfoCommandButton(userId))
+        self.add_item(JoinSupportServerButton())
+
+class ServerView(ui.View):
+    timeout = None
+    def __init__(self, invite, serverName):
+        super().__init__()
+        self.add_item(JoinServerButton(invite, serverName))
+        self.add_item(JoinSupportServerButton())
 
 @client.tree.command(name="info", description = "Show information about "+config.NAME)
 async def info_command(interaction):
@@ -302,7 +354,7 @@ class SetupModal(ui.Modal, title=config.NAME+" setup"):
             slogan="N/A"
         else:
             slogan = self.slogan.value
-        set_server(str(self.channel.guild.id), self.description.value, language, str(invite), slogan, "false", "0", str(self.channel.id))
+        set_server(str(self.channel.guild.id), self.description.value, language, str(invite), slogan, "0", datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), str(self.channel.id))
         embed = discord.Embed(title="Setup successful", color=EMBED_COLOR)
         embed.description = """The setup has been successful.
 - NAME: """+str(self.channel.guild.name)+"""
@@ -358,6 +410,132 @@ async def show_command(interaction):
     else:
         embed.set_footer(text = config.NAME + " Support: " + config.SUPPORT_SERVER)
     await interaction.followup.send(embed = embed, ephemeral=False)
+
+@client.tree.command(name="bump", description="Bump the current server")
+async def bump_command(interaction):
+    server_dict = get_server(interaction.guild.id)
+    if not server_dict:
+        await interaction.response.defer(ephemeral=True)
+        return await sendNotSetupEmbed(interaction)
+    channel = await interaction.guild.fetch_channel(server_dict["channel"])
+    try:
+        await client.fetch_invite(server_dict["invite"])
+    except:
+        try:
+            server_dict["invite"] = str(await channel.create_invite(max_age = 300))
+        except:
+            await interaction.response.defer(ephemeral=True)
+            return await sendMissingPermsEmbed(interaction, "create_instant_invite")
+    permissions = channel.permissions_for(interaction.guild.default_role)
+    if not permissions.read_messages:
+        await interaction.response.defer(ephemeral=True)
+        return await sendMissingPermsEmbed(interaction, "send_messages in "+str(channel.mention))
+    oldbumptime = datetime.datetime.strptime(server_dict["last_bump"], "%Y-%m-%d %H:%M:%S")
+    newbumptime = datetime.datetime.now()
+    seconds_passed = (newbumptime - oldbumptime).total_seconds()
+    print(server_dict["premium"])
+    if config.ENABLE_PREMIUM and server_dict["premium"] != "false" and server_dict["premium"] != False:
+        BUMP_RATE_LIMIT = config.PREMIUM_BUMP_RATE_LIMIT
+    else:
+        BUMP_RATE_LIMIT = config.BUMP_RATE_LIMIT
+    if seconds_passed < BUMP_RATE_LIMIT:
+        await interaction.response.defer(ephemeral=True)
+        return await sendNeedWaitEmbed(interaction, BUMP_RATE_LIMIT - seconds_passed)
+    else:
+        newbumptime = newbumptime.strftime("%Y-%m-%d %H:%M:%S")
+    await interaction.response.defer()
+    embed = discord.Embed(title=interaction.guild.name, color=EMBED_COLOR)
+    if interaction.guild.icon:
+        embed.set_thumbnail(url = interaction.guild.icon.url)
+        if server_dict["slogan"] != "N/A":
+            embed.set_footer(text=server_dict["slogan"], icon_url = interaction.guild.icon.url)
+    else:
+        if server_dict["slogan"] != "N/A":
+            embed.set_footer(text=server_dict["slogan"])
+    owner = interaction.guild.owner.name
+    if int(interaction.guild.owner.discriminator) != 0:
+        owner += "#"+str(interaction.guild.owner.discriminator)
+    username = interaction.user.name
+    if int(interaction.user.discriminator) != 0:
+        username += "#"+str(interaction.user.discriminator)
+    server_dict["bump_count"] = int(server_dict["bump_count"]) + 1
+    if config.ENABLE_PREMIUM:
+        if server_dict["premium"] != "false" and server_dict["premium"] != False:
+            embed.add_field(name="Server Information", value="""> Language: `"""+server_dict["language"]+"""`
+> Members: `"""+str(interaction.guild.member_count)+"""`
+> Owner: `"""+owner+"""`
+> Premium: `activated`""", inline=False)
+        else:
+            embed.add_field(name="Server Information", value="""> Language: `"""+server_dict["language"]+"""`
+> Members: `"""+str(interaction.guild.member_count)+"""`
+> Owner: `"""+owner+"""`
+> Premium: `disabled`""", inline=False)
+    else:
+        embed.add_field(name="Server Information", value="""> Language: `"""+server_dict["language"]+"""`
+> Members: `"""+str(interaction.guild.member_count)+"""`
+> Owner: `"""+owner+"`", inline=False)
+    embed.add_field(name="Description", value=server_dict["description"], inline = False)
+    embed.add_field(name="Bump Information", value="""> Bumped by `"""+username+"""`
+> Bumped at `"""+str(datetime.datetime.now().strftime("%d/%m/%Y, %H:%M:%S"))+"""`
+> Bump count: `"""+str(server_dict["bump_count"])+"""`""", inline = False)
+    set_server(str(interaction.guild.id), str(server_dict["description"]), str(server_dict["language"]), str(server_dict["invite"]), str(server_dict["slogan"]), str(server_dict["premium"]), str(server_dict["bump_count"]), newbumptime, str(server_dict["channel"]))
+    bumpingNowEmbed = discord.Embed(title="Bump started", description="This server is now being shared in other servers.", color=EMBED_COLOR)
+    if client.user.avatar:
+        bumpingNowEmbed.set_footer(icon_url = client.user.avatar.url, text = config.NAME + " Support: " + config.SUPPORT_SERVER)
+    else:
+        bumpingNowEmbed.set_footer(text = config.NAME + " Support: " + config.SUPPORT_SERVER)
+    await interaction.followup.send(embed=bumpingNowEmbed)
+    if config.ENABLE_PREMIUM and server_dict["premium"] != "false" and server_dict["premium"] != False:
+        iterations = int(len(client.guilds) /50) + 1
+    else:
+        iterations = 1
+    for n in range(iterations):
+        for guild in client.guilds:
+            guild_server_dict = get_server(guild.id)
+            if guild_server_dict:
+                guild_channel = await guild.fetch_channel(guild_server_dict["channel"])
+                try:
+                    await guild_channel.send(embed = embed, view = ServerView(server_dict["invite"], interaction.guild.name))
+                except:
+                    pass
+
+
+@client.tree.command(name="setpremium", description="Set the premium status of a server.")
+async def setpremium_command(interaction, server_id:str, is_premium:bool):
+    """
+
+    Parameters
+    ----------
+    server_id : str
+        The ID of the server to set the premium status for
+    is_premium : bool
+        If the server has premium"""
+    server_id = int(server_id)
+    server_dict = get_server(str(server_id))
+    if not interaction.user.id in config.ADMINS:
+        await interaction.response.defer(ephemeral=True)
+        return await sendNoAdminEmbed(interaction, "bot_admin")
+    if not server_dict:
+        await interaction.response.defer(ephemeral=True)
+        return await sendGuildNotFoundEmbed(interaction, server_id)
+    server = None
+    for guild in client.guilds:
+        if guild.id == server_id:
+            server = guild
+    if is_premium:
+        if server_dict["premium"] == "true":
+            return await interaction.response.send_message(server.name+" already has premium")
+        server_dict["premium"] = "true"
+        set_server(str(interaction.guild.id), str(server_dict["description"]), str(server_dict["language"]), str(server_dict["invite"]), str(server_dict["slogan"]), str(server_dict["premium"]), str(server_dict["bump_count"]), str(server_dict["last_bump"]), str(server_dict["channel"]))
+        await interaction.response.send_message(server.name+" now has premium")
+    else:
+        if server_dict["premium"] == "false":
+            return await interaction.response.send_message(server.name+" already has no premium")
+        server_dict["premium"] = "false"
+        set_server(str(interaction.guild.id), str(server_dict["description"]), str(server_dict["language"]), str(server_dict["invite"]), str(server_dict["slogan"]), str(server_dict["premium"]), str(server_dict["bump_count"]), str(server_dict["last_bump"]), str(server_dict["channel"]))
+        await interaction.response.send_message(server.name+" now has no premium")
+
+
 
 
 
