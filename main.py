@@ -354,7 +354,7 @@ class SetupModal(ui.Modal, title=config.NAME+" setup"):
             slogan="N/A"
         else:
             slogan = self.slogan.value
-        set_server(str(self.channel.guild.id), self.description.value, language, str(invite), slogan, "0", datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), str(self.channel.id))
+        set_server(str(self.channel.guild.id), self.description.value, language, str(invite), slogan, "false", "0", datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), str(self.channel.id))
         embed = discord.Embed(title="Setup successful", color=EMBED_COLOR)
         embed.description = """The setup has been successful.
 - NAME: """+str(self.channel.guild.name)+"""
