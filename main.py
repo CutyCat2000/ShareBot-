@@ -282,7 +282,7 @@ class InfoPremiumButton(ui.Button):
             return
         embed = interaction.message.embeds[0]
         embed.description="""[Join to get premium]("""+config.SUPPORT_SERVER+""")
-* Premium Perks: *
+*Premium Perks:*
 > Faster Bumps
 > More powerful Bumps"""
         await interaction.message.edit(embed = embed)
