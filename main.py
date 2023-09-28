@@ -272,6 +272,21 @@ class InfoCommandButton(ui.Button):
 """
         await interaction.message.edit(embed = embed)
 
+class InfoPremiumButton(ui.Button):
+    def __init__(self, userId):
+        super().__init__(label = "Premium", emoji = "🌟")
+        self.userId = userId
+    async def callback(self, interaction):
+        await interaction.response.defer(ephemeral = True)
+        if await sendNotYourButtonEmbed(interaction, self.userId):
+            return
+        embed = interaction.message.embeds[0]
+        embed.description="""[Join to get premium]("""+config.SUPPORT_SERVER+""")
+* Premium Perks: *
+> Faster Bumps
+> More powerful Bumps"""
+        await interaction.message.edit(embed = embed)
+
 class JoinServerButton(ui.Button):
     def __init__(self, invite, serverName):
         if not "discord.gg/" in invite:
@@ -292,6 +307,8 @@ class InfoView(ui.View):
         self.add_item(InfoAboutButton(userId))
         self.add_item(InfoPermissionButton(userId))
         self.add_item(InfoCommandButton(userId))
+        if config.ENABLE_PREMIUM:
+            self.add_item(InfoPremiumButton(userId))
         self.add_item(JoinSupportServerButton())
 
 class ServerView(ui.View):
