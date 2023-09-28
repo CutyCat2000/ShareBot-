@@ -543,7 +543,7 @@ async def setpremium_command(interaction, server_id:str, is_premium:bool):
         if server_dict["premium"] == "true":
             return await interaction.response.send_message(server.name+" already has premium")
         server_dict["premium"] = "true"
-        set_server(str(guild.id), str(server_dict["description"]), str(server_dict["language"]), str(server_dict["invite"]), str(server_dict["slogan"]), str(server_dict["premium"]), str(server_dict["bump_count"]), str(server_dict["last_bump"]), str(server_dict["channel"]))
+        set_server(str(server.id), str(server_dict["description"]), str(server_dict["language"]), str(server_dict["invite"]), str(server_dict["slogan"]), str(server_dict["premium"]), str(server_dict["bump_count"]), str(server_dict["last_bump"]), str(server_dict["channel"]))
         await interaction.response.send_message(server.name+" now has premium")
     else:
         if server_dict["premium"] == "false":
